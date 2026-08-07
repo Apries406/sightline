@@ -4,6 +4,13 @@ Agent-first macOS screenshot CLI built with Bun + TypeScript.
 
 The goal is not a manual Snipaste clone. The product is a visual acquisition tool for agents: locate a target, report its geometry, capture it, and return machine-readable evidence.
 
+## Install
+
+```bash
+npm install -g @apries/sightline
+sightline --help
+```
+
 ## Features
 
 - Locate visible macOS windows by app name, bundle id, pid, title pattern, window id, or index.

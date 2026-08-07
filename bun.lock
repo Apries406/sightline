@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "sightline",
+      "name": "@apries/sightline",
       "devDependencies": {
         "@types/bun": "latest",
       },
