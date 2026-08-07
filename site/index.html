@@ -1,0 +1,708 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sightline - Agent-first macOS Screenshot CLI</title>
+    <style>
+      :root {
+        --ink: #17130c;
+        --muted: #695f50;
+        --paper: #f5efe2;
+        --paper-strong: #fffaf0;
+        --line: rgba(23, 19, 12, 0.16);
+        --orange: #e8662f;
+        --green: #1d6f61;
+        --blue: #1b4d89;
+        --shadow: 0 24px 80px rgba(36, 27, 13, 0.18);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        color: var(--ink);
+        font-family: Charter, "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+        background:
+          radial-gradient(circle at 8% 10%, rgba(232, 102, 47, 0.22), transparent 26rem),
+          radial-gradient(circle at 85% 4%, rgba(29, 111, 97, 0.16), transparent 24rem),
+          linear-gradient(135deg, #f6eddc 0%, #efe2cc 48%, #f7f1e6 100%);
+      }
+
+      body::before {
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        pointer-events: none;
+        content: "";
+        opacity: 0.24;
+        background-image:
+          linear-gradient(rgba(23, 19, 12, 0.08) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(23, 19, 12, 0.08) 1px, transparent 1px);
+        background-size: 42px 42px;
+        mask-image: linear-gradient(to bottom, #000 0%, transparent 78%);
+      }
+
+      a {
+        color: inherit;
+      }
+
+      .shell {
+        width: min(1180px, calc(100% - 40px));
+        margin: 0 auto;
+      }
+
+      .nav {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        padding: 18px 0;
+        backdrop-filter: blur(16px);
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        font-family: "Avenir Next", Futura, sans-serif;
+        font-weight: 800;
+        letter-spacing: -0.04em;
+      }
+
+      .brand-mark {
+        display: grid;
+        width: 34px;
+        height: 34px;
+        place-items: center;
+        color: #fffaf0;
+        background: var(--ink);
+        border-radius: 10px;
+        box-shadow: 6px 6px 0 rgba(232, 102, 47, 0.42);
+      }
+
+      .nav-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        color: var(--muted);
+        font-family: "Avenir Next", Futura, sans-serif;
+        font-size: 14px;
+      }
+
+      .nav-links a {
+        text-decoration: none;
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: 1.03fr 0.97fr;
+        gap: 42px;
+        align-items: center;
+        padding: 76px 0 68px;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        color: var(--green);
+        background: rgba(255, 250, 240, 0.72);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        font-family: "Avenir Next", Futura, sans-serif;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .pulse {
+        width: 9px;
+        height: 9px;
+        background: var(--green);
+        border-radius: 999px;
+        box-shadow: 0 0 0 8px rgba(29, 111, 97, 0.14);
+      }
+
+      h1 {
+        max-width: 780px;
+        margin: 18px 0 18px;
+        font-family: "Avenir Next", Futura, sans-serif;
+        font-size: clamp(52px, 8vw, 104px);
+        line-height: 0.88;
+        letter-spacing: -0.08em;
+      }
+
+      .hero-copy {
+        max-width: 650px;
+        margin: 0;
+        color: var(--muted);
+        font-size: clamp(19px, 2vw, 24px);
+        line-height: 1.45;
+      }
+
+      .hero-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+        margin-top: 28px;
+      }
+
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 48px;
+        padding: 0 18px;
+        border: 1px solid var(--ink);
+        border-radius: 14px;
+        font-family: "Avenir Next", Futura, sans-serif;
+        font-weight: 800;
+        text-decoration: none;
+        box-shadow: 5px 5px 0 rgba(23, 19, 12, 0.22);
+        transition: transform 180ms ease, box-shadow 180ms ease;
+      }
+
+      .button:hover {
+        transform: translate(-2px, -2px);
+        box-shadow: 8px 8px 0 rgba(23, 19, 12, 0.18);
+      }
+
+      .button.primary {
+        color: #fffaf0;
+        background: var(--ink);
+      }
+
+      .button.secondary {
+        background: rgba(255, 250, 240, 0.7);
+      }
+
+      .terminal-card {
+        position: relative;
+        overflow: hidden;
+        padding: 18px;
+        background: #19150f;
+        border: 1px solid rgba(255, 250, 240, 0.16);
+        border-radius: 30px;
+        box-shadow: var(--shadow);
+      }
+
+      .terminal-card::after {
+        position: absolute;
+        right: -80px;
+        bottom: -90px;
+        width: 220px;
+        height: 220px;
+        content: "";
+        background: radial-gradient(circle, rgba(232, 102, 47, 0.6), transparent 65%);
+      }
+
+      .terminal-dots {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 18px;
+      }
+
+      .terminal-dots span {
+        width: 12px;
+        height: 12px;
+        border-radius: 999px;
+        background: #e8662f;
+      }
+
+      .terminal-dots span:nth-child(2) {
+        background: #e5bc57;
+      }
+
+      .terminal-dots span:nth-child(3) {
+        background: #62a986;
+      }
+
+      pre {
+        position: relative;
+        z-index: 1;
+        overflow-x: auto;
+        margin: 0;
+        color: #f7efdd;
+        font-family: "SFMono-Regular", "Menlo", "Monaco", monospace;
+        font-size: 14px;
+        line-height: 1.7;
+        white-space: pre;
+      }
+
+      .tok-prompt {
+        color: #62a986;
+        font-weight: 800;
+      }
+
+      .tok-cmd {
+        color: #f4d06f;
+        font-weight: 800;
+      }
+
+      .tok-flag {
+        color: #78c7ff;
+      }
+
+      .tok-string {
+        color: #ff9f68;
+      }
+
+      .tok-comment {
+        color: #8f8777;
+        font-style: italic;
+      }
+
+      .tok-key {
+        color: #78c7ff;
+      }
+
+      .tok-bool,
+      .tok-num {
+        color: #b8e986;
+      }
+
+      .tok-punc {
+        color: rgba(247, 239, 221, 0.62);
+      }
+
+      .section {
+        padding: 72px 0;
+      }
+
+      .section-heading {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 26px;
+        margin-bottom: 28px;
+      }
+
+      h2 {
+        max-width: 680px;
+        margin: 0;
+        font-family: "Avenir Next", Futura, sans-serif;
+        font-size: clamp(36px, 5vw, 64px);
+        line-height: 0.95;
+        letter-spacing: -0.065em;
+      }
+
+      .section-heading p {
+        max-width: 420px;
+        margin: 0;
+        color: var(--muted);
+        font-size: 18px;
+        line-height: 1.5;
+      }
+
+      .features {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+      }
+
+      .feature {
+        min-height: 220px;
+        padding: 22px;
+        background: rgba(255, 250, 240, 0.62);
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        box-shadow: 0 14px 40px rgba(36, 27, 13, 0.08);
+      }
+
+      .feature strong {
+        display: block;
+        margin-bottom: 12px;
+        font-family: "Avenir Next", Futura, sans-serif;
+        font-size: 21px;
+        letter-spacing: -0.035em;
+      }
+
+      .feature p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.55;
+      }
+
+      .gallery {
+        display: grid;
+        grid-template-columns: 1.25fr 0.75fr;
+        gap: 18px;
+      }
+
+      .shot {
+        overflow: hidden;
+        background: rgba(255, 250, 240, 0.72);
+        border: 1px solid var(--line);
+        border-radius: 28px;
+        box-shadow: var(--shadow);
+      }
+
+      .shot img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        background: #211b14;
+      }
+
+      .shot figcaption {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 14px 16px 16px;
+        color: var(--muted);
+        font-family: "Avenir Next", Futura, sans-serif;
+        font-size: 13px;
+      }
+
+      .shot figcaption b {
+        color: var(--ink);
+      }
+
+      .gallery-main {
+        min-height: 540px;
+      }
+
+      .gallery-side {
+        display: grid;
+        gap: 18px;
+      }
+
+      .gallery-side .shot {
+        min-height: 260px;
+      }
+
+      .mini-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 18px;
+        margin-top: 18px;
+      }
+
+      .mini-grid .shot {
+        min-height: 190px;
+        box-shadow: 0 18px 48px rgba(36, 27, 13, 0.12);
+      }
+
+      .code-band {
+        display: grid;
+        grid-template-columns: 0.9fr 1.1fr;
+        gap: 18px;
+        align-items: stretch;
+      }
+
+      .target-card {
+        padding: 26px;
+        color: #fffaf0;
+        background:
+          linear-gradient(135deg, rgba(27, 77, 137, 0.92), rgba(29, 111, 97, 0.92)),
+          var(--blue);
+        border-radius: 28px;
+        box-shadow: var(--shadow);
+      }
+
+      .target-card h3 {
+        margin: 0 0 12px;
+        font-family: "Avenir Next", Futura, sans-serif;
+        font-size: 32px;
+        line-height: 1;
+        letter-spacing: -0.055em;
+      }
+
+      .target-card p {
+        margin: 0;
+        color: rgba(255, 250, 240, 0.78);
+        font-size: 18px;
+        line-height: 1.5;
+      }
+
+      .target-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 22px;
+      }
+
+      .pill {
+        padding: 8px 11px;
+        background: rgba(255, 250, 240, 0.16);
+        border: 1px solid rgba(255, 250, 240, 0.22);
+        border-radius: 999px;
+        font-family: "SFMono-Regular", "Menlo", "Monaco", monospace;
+        font-size: 12px;
+      }
+
+      .footer {
+        padding: 54px 0 44px;
+        color: var(--muted);
+        border-top: 1px solid var(--line);
+        font-family: "Avenir Next", Futura, sans-serif;
+      }
+
+      .footer strong {
+        color: var(--ink);
+      }
+
+      .reveal {
+        animation: rise 700ms ease both;
+      }
+
+      .delay-1 {
+        animation-delay: 120ms;
+      }
+
+      .delay-2 {
+        animation-delay: 220ms;
+      }
+
+      @keyframes rise {
+        from {
+          opacity: 0;
+          transform: translateY(18px);
+        }
+
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @media (max-width: 900px) {
+        .hero,
+        .gallery,
+        .code-band {
+          grid-template-columns: 1fr;
+        }
+
+        .features,
+        .mini-grid {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .section-heading {
+          display: block;
+        }
+
+        .section-heading p {
+          margin-top: 14px;
+        }
+      }
+
+      @media (max-width: 620px) {
+        .shell {
+          width: min(100% - 24px, 1180px);
+        }
+
+        .nav {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .features,
+        .mini-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .gallery-main,
+        .gallery-side .shot,
+        .mini-grid .shot {
+          min-height: 0;
+        }
+
+        h1 {
+          font-size: 54px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="nav shell">
+      <div class="brand">
+        <span class="brand-mark">m</span>
+        <span>Sightline</span>
+      </div>
+      <div class="nav-links">
+        <a href="#features">功能</a>
+        <a href="#gallery">截图证据</a>
+        <a href="#commands">命令</a>
+        <a href="#architecture">架构</a>
+      </div>
+    </nav>
+
+    <main>
+      <section class="hero shell">
+        <div class="reveal">
+          <span class="eyebrow"><span class="pulse"></span>Agent-first macOS Screenshot CLI</span>
+          <h1>让 Agent 先定位，再截图。</h1>
+          <p class="hero-copy">
+            Sightline 是一个面向自动化 Agent 的 macOS 截图 CLI。它不要求人手动框选，而是通过
+            <strong>app、bundle id、pid、window id、rect、screen、display</strong>
+            等 target spec 直接找到目标窗口，返回 JSON 证据并产出截图文件。
+          </p>
+          <div class="hero-actions">
+            <a class="button primary" href="#commands">查看 CLI 用法</a>
+            <a class="button secondary" href="#gallery">查看截图样例</a>
+          </div>
+        </div>
+
+        <aside class="terminal-card reveal delay-1" aria-label="CLI example">
+          <div class="terminal-dots"><span></span><span></span><span></span></div>
+          <pre><code><span class="tok-prompt">$</span> <span class="tok-cmd">bin/sightline</span> locate <span class="tok-flag">--target</span> <span class="tok-string">'app:Google Chrome'</span> <span class="tok-flag">--json</span>
+<span class="tok-punc">{</span>
+  <span class="tok-key">"ok"</span><span class="tok-punc">:</span> <span class="tok-bool">true</span><span class="tok-punc">,</span>
+  <span class="tok-key">"backend"</span><span class="tok-punc">:</span> <span class="tok-string">"macos-window"</span><span class="tok-punc">,</span>
+  <span class="tok-key">"window"</span><span class="tok-punc">:</span> <span class="tok-punc">{</span>
+    <span class="tok-key">"app"</span><span class="tok-punc">:</span> <span class="tok-string">"Google Chrome"</span><span class="tok-punc">,</span>
+    <span class="tok-key">"bundleId"</span><span class="tok-punc">:</span> <span class="tok-string">"com.google.Chrome"</span><span class="tok-punc">,</span>
+    <span class="tok-key">"bounds"</span><span class="tok-punc">:</span> <span class="tok-punc">{</span> <span class="tok-key">"x"</span><span class="tok-punc">:</span> <span class="tok-num">-2176</span><span class="tok-punc">,</span> <span class="tok-key">"y"</span><span class="tok-punc">:</span> <span class="tok-num">-1770</span><span class="tok-punc">,</span> <span class="tok-key">"width"</span><span class="tok-punc">:</span> <span class="tok-num">3200</span><span class="tok-punc">,</span> <span class="tok-key">"height"</span><span class="tok-punc">:</span> <span class="tok-num">1770</span> <span class="tok-punc">}</span>
+  <span class="tok-punc">}</span>
+<span class="tok-punc">}</span>
+
+<span class="tok-prompt">$</span> <span class="tok-cmd">bin/sightline</span> capture <span class="tok-flag">--target</span> <span class="tok-string">'app:HybridDevtool'</span> <span class="tok-flag">-o</span> <span class="tok-string">/tmp/devtool.png</span> <span class="tok-flag">--json</span></code></pre>
+        </aside>
+      </section>
+
+      <section id="features" class="section shell">
+        <div class="section-heading">
+          <h2>不是截图玩具，是 Agent 视觉入口。</h2>
+          <p>核心设计是机器可控、可定位、可验证。每次 capture 都能返回窗口身份、坐标和图片路径。</p>
+        </div>
+        <div class="features">
+          <article class="feature reveal">
+            <strong>窗口定位</strong>
+            <p>通过 app 名、bundle id、pid、title pattern、window id 定位目标窗口，适合 Chrome、LynxDesktop、HybridDevtool。</p>
+          </article>
+          <article class="feature reveal delay-1">
+            <strong>脚本化截图</strong>
+            <p>支持窗口、矩形、全屏、主屏和指定 display 截图，输出 PNG/JPG/TIFF 等格式。</p>
+          </article>
+          <article class="feature reveal delay-2">
+            <strong>JSON 证据</strong>
+            <p>每次 locate/capture 输出结构化 JSON，包含 target、backend、window id、bounds、path、bytes、width、height。</p>
+          </article>
+          <article class="feature reveal delay-2">
+            <strong>Lynx 预留</strong>
+            <p>支持 LynxDesktop/HybridDevtool 桌面窗口定位，并预留 lynx:headless 后端接入 DevTool smoke script。</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="gallery" class="section shell">
+        <div class="section-heading">
+          <h2>真实截图，全部由 CLI 生成。</h2>
+          <p>下面这些图片来自项目的 examples 目录，用同一套 target-first 命令生成。</p>
+        </div>
+
+        <div class="gallery">
+          <figure class="shot gallery-main reveal">
+            <img src="../examples/chrome-final.png" alt="Google Chrome window captured by Sightline" />
+            <figcaption><b>Chrome target</b><span>app:Google Chrome</span></figcaption>
+          </figure>
+          <div class="gallery-side">
+            <figure class="shot reveal delay-1">
+              <img src="../examples/hybriddevtool.png" alt="HybridDevtool captured by Sightline" />
+              <figcaption><b>HybridDevtool</b><span>app:HybridDevtool</span></figcaption>
+            </figure>
+            <figure class="shot reveal delay-2">
+              <img src="../examples/lynxdesktop.png" alt="LynxDesktop captured by Sightline" />
+              <figcaption><b>LynxDesktop</b><span>bundle:com.lynx.Desktop.LynxDesktop</span></figcaption>
+            </figure>
+          </div>
+        </div>
+
+        <div class="mini-grid">
+          <figure class="shot">
+            <img src="../examples/rect-final.png" alt="Small rect capture final" />
+            <figcaption><b>Rect final</b><span>rect:0,0,200,120</span></figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="../examples/chrome.png" alt="Chrome earlier capture" />
+            <figcaption><b>Chrome run</b><span>window screenshot</span></figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="../examples/rect.png" alt="Small rect capture" />
+            <figcaption><b>Rect run</b><span>retina 2x PNG</span></figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section id="commands" class="section shell">
+        <div class="code-band">
+          <div class="target-card reveal">
+            <h3>Target DSL</h3>
+            <p>Agent 不需要知道屏幕在哪里。它只要声明目标，Sightline 负责解析、定位、截图。</p>
+            <div class="target-list">
+              <span class="pill">app:Google Chrome</span>
+              <span class="pill">bundle:com.google.Chrome</span>
+              <span class="pill">pid:29194</span>
+              <span class="pill">window:23188</span>
+              <span class="pill">rect:0,0,200,120</span>
+              <span class="pill">screen:main</span>
+              <span class="pill">display:2</span>
+              <span class="pill">lynx:headless,url:...</span>
+            </div>
+          </div>
+
+          <div class="terminal-card reveal delay-1">
+            <div class="terminal-dots"><span></span><span></span><span></span></div>
+            <pre><code><span class="tok-comment"># 枚举窗口</span>
+<span class="tok-cmd">bin/sightline</span> list windows <span class="tok-flag">--json</span>
+
+<span class="tok-comment"># 定位 Chrome 并返回窗口坐标</span>
+<span class="tok-cmd">bin/sightline</span> locate <span class="tok-flag">--target</span> <span class="tok-string">'app:Google Chrome'</span> <span class="tok-flag">--json</span>
+
+<span class="tok-comment"># 截图 Chrome</span>
+<span class="tok-cmd">bin/sightline</span> capture <span class="tok-flag">--target</span> <span class="tok-string">'app:Google Chrome'</span> <span class="tok-flag">-o</span> <span class="tok-string">/tmp/chrome.png</span> <span class="tok-flag">--json</span>
+
+<span class="tok-comment"># 截图 LynxDesktop</span>
+<span class="tok-cmd">bin/sightline</span> capture <span class="tok-flag">--target</span> <span class="tok-string">'bundle:com.lynx.Desktop.LynxDesktop'</span> <span class="tok-flag">-o</span> <span class="tok-string">/tmp/lynx.png</span> <span class="tok-flag">--json</span>
+
+<span class="tok-comment"># 检查权限和 helper</span>
+<span class="tok-cmd">bin/sightline</span> doctor <span class="tok-flag">--json</span></code></pre>
+          </div>
+        </div>
+      </section>
+
+      <section id="architecture" class="section shell">
+        <div class="section-heading">
+          <h2>Bun/TS 管产品层，Swift 管 macOS 事实。</h2>
+          <p>TS 负责 CLI、target parser、JSON 协议和后端编排；Swift helper 负责 WindowServer 侧的窗口/显示器枚举和权限信号。</p>
+        </div>
+        <div class="features">
+          <article class="feature">
+            <strong>TypeScript CLI</strong>
+            <p>入口位于 bin/sightline，打包产物在 dist/sightline.js。命令包含 list、locate、capture、doctor。</p>
+          </article>
+          <article class="feature">
+            <strong>Swift Helper</strong>
+            <p>使用 CoreGraphics/AppKit 获取 displays、windows、bundle id、bounds、权限状态。</p>
+          </article>
+          <article class="feature">
+            <strong>screencapture</strong>
+            <p>窗口、矩形、屏幕和 display 截图统一走 macOS 原生命令，稳定复用系统权限模型。</p>
+          </article>
+          <article class="feature">
+            <strong>DevTool Ready</strong>
+            <p>桌面 Lynx 工具走窗口定位；headless Lynx 路径预留给 DevTool smoke script。</p>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer shell">
+      <strong>Sightline</strong> lives at <code>/Users/bytedance/apries/mshot-agent</code>.
+      Open this page from <code>site/index.html</code>.
+    </footer>
+  </body>
+</html>

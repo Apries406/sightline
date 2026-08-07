@@ -1,0 +1,10 @@
+.DS_Store
+node_modules/
+*.log
+
+# Build artifacts
+dist/mshot-agent.js
+native/macos-helper/.build/
+
+# Local generated captures
+Pictures/

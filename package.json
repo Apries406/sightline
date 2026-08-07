@@ -1,0 +1,31 @@
+{
+  "name": "sightline",
+  "version": "0.1.0",
+  "description": "Agent-first macOS screenshot CLI with target-based window discovery.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "sightline": "./bin/sightline",
+    "mshot-agent": "./bin/mshot-agent"
+  },
+  "scripts": {
+    "build": "bun run build:helper && bun build src/cli.ts --target bun --outfile dist/sightline.js",
+    "build:helper": "mkdir -p native/macos-helper/.build && swiftc native/macos-helper/main.swift -o native/macos-helper/.build/mshot-macos-helper",
+    "check": "bun run build && bun run src/cli.ts --version && bun run src/cli.ts doctor --json && bun run src/cli.ts list displays --json",
+    "dev": "bun run src/cli.ts",
+    "postinstall": "bun run build:helper",
+    "prepublishOnly": "bun run check"
+  },
+  "files": [
+    "README.md",
+    "bin/",
+    "dist/sightline.js",
+    "native/macos-helper/main.swift",
+    "src/",
+    "tsconfig.json"
+  ],
+  "dependencies": {},
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}
