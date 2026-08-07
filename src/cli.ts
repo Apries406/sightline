@@ -16,7 +16,7 @@ import { printJson } from "./lib/json";
 import { defaultOutputPath, helperPath } from "./lib/paths";
 import { parseTarget, resolveWindowTarget, type Target } from "./lib/target";
 
-const VERSION = "0.1.0";
+const VERSION = "0.1.2";
 
 interface ParsedArgs {
   command?: string;

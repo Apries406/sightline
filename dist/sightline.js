@@ -301,7 +301,7 @@ function resolveWindowTarget(target, windows) {
 }
 
 // src/cli.ts
-var VERSION = "0.1.0";
+var VERSION = "0.1.2";
 function usage() {
   return `Sightline ${VERSION}
 

@@ -1,6 +1,6 @@
 {
   "name": "@apries/sightline",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Agent-first macOS screenshot CLI with target-based window discovery.",
   "license": "MIT",
   "type": "module",
