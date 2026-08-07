@@ -135,6 +135,37 @@ function captureScreen(options) {
     throw new CliError(result.stderr.trim() || `screencapture exited ${result.status}`);
   }
 }
+function recordScreen(options) {
+  mkdirSync(dirname2(options.output), { recursive: true });
+  const args = ["-v"];
+  if (options.quiet !== false)
+    args.push("-x");
+  if (options.duration !== undefined)
+    args.push(`-V${options.duration}`);
+  if (options.audioDeviceId !== undefined)
+    args.push(`-G${options.audioDeviceId}`);
+  else if (options.audio)
+    args.push("-g");
+  if (options.clicks)
+    args.push("-k");
+  if (options.target === "main")
+    args.push("-m");
+  if (typeof options.target === "object" && "display" in options.target)
+    args.push(`-D${options.target.display}`);
+  if (typeof options.target === "object" && "rect" in options.target)
+    args.push(`-R${options.target.rect}`);
+  args.push(options.output);
+  const result = spawnSync3("/usr/sbin/screencapture", args, {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+  if (result.error) {
+    throw new CliError(`failed to run screencapture: ${result.error.message}`);
+  }
+  if (result.status !== 0) {
+    throw new CliError(result.stderr.trim() || `screencapture exited ${result.status}`);
+  }
+}
 
 // src/lib/imageInfo.ts
 import { readFileSync } from "fs";
@@ -301,7 +332,7 @@ function resolveWindowTarget(target, windows) {
 }
 
 // src/cli.ts
-var VERSION = "0.1.2";
+var VERSION = "0.2.0";
 function usage() {
   return `Sightline ${VERSION}
 
@@ -312,6 +343,7 @@ Usage:
   sightline list windows [--json]
   sightline locate --target <target> [--json]
   sightline capture --target <target> [options]
+  sightline record --target <target> [options]
   sightline doctor [--json]
 
 Targets:
@@ -333,9 +365,19 @@ Capture options:
   --also-clipboard          Also copy saved image to clipboard.
   --json                    Print structured JSON.
 
+Record options:
+  -o, --output <file>       Output movie path. Default: ~/Movies/Sightline/*.mov
+  --duration <seconds>      Stop automatically after N seconds.
+  --audio                   Record default microphone input.
+  --audio-device <id>       Record a specific audio device id.
+  --clicks                  Show clicks in the recording.
+  --json                    Print structured JSON.
+
 Examples:
   sightline capture --target 'app:Google Chrome' --json
   sightline capture --target 'bundle:com.google.Chrome,title:*DevTools*'
+  sightline record --target 'app:Google Chrome' --duration 5 --json
+  sightline record --target 'rect:100,100,800,500' -o /tmp/demo.mov --json
   sightline locate --target 'app:Lynx'
   sightline capture --target 'rect:100,100,800,500' -o /tmp/area.png
   sightline capture --target 'lynx:headless,url:http://127.0.0.1:3000/template.js'
@@ -393,6 +435,13 @@ function targetFromFlags(flags) {
 }
 function outputPath(flags, format) {
   return resolve2(flagString(flags, "output") ?? defaultOutputPath(format));
+}
+function defaultRecordPath() {
+  const stamp = new Date().toISOString().replaceAll(":", "").replace(/\.\d{3}Z$/, "Z");
+  return resolve2(process.env.HOME ?? ".", "Movies/Sightline", `recording-${stamp}.mov`);
+}
+function recordOutputPath(flags) {
+  return resolve2(flagString(flags, "output") ?? defaultRecordPath());
 }
 function inferFormat(flags) {
   const explicit = flagString(flags, "format");
@@ -483,6 +532,9 @@ function handleLocate(flags, json) {
 function statImage(path) {
   return { path, bytes: statSync(path).size, ...readPngInfo(path) };
 }
+function statFile(path) {
+  return { path, bytes: statSync(path).size };
+}
 function handleCapture(flags, json) {
   const target = targetFromFlags(flags);
   const format = inferFormat(flags);
@@ -550,6 +602,61 @@ function handleCapture(flags, json) {
     process.stdout.write(`${output}
 `);
 }
+function handleRecord(flags, json) {
+  const target = targetFromFlags(flags);
+  if (target.kind === "lynx-headless") {
+    throw new CliError("record does not support lynx:headless; use capture for headless screenshots");
+  }
+  const output = recordOutputPath(flags);
+  const durationText = flagString(flags, "duration");
+  const duration = durationText === undefined ? undefined : Number(durationText);
+  if (duration !== undefined && (!Number.isFinite(duration) || duration <= 0)) {
+    throw new CliError("--duration must be a positive number");
+  }
+  mkdirSync2(dirname3(output), { recursive: true });
+  let backend = "macos-record";
+  let windowPayload;
+  let recordTarget;
+  if (target.kind === "rect") {
+    recordTarget = { rect: target.rect };
+  } else if (target.kind === "screen") {
+    recordTarget = target.screen;
+  } else if (target.kind === "display") {
+    recordTarget = { display: target.display };
+  } else {
+    const window = resolveWindowTarget(target, listWindows());
+    windowPayload = describeWindow(window);
+    const { x, y, width, height } = window.bounds;
+    recordTarget = { rect: `${x},${y},${width},${height}` };
+    backend = "macos-window-record";
+  }
+  recordScreen({
+    target: recordTarget,
+    output,
+    duration,
+    audio: flagBool(flags, "audio"),
+    audioDeviceId: flagString(flags, "audio-device"),
+    clicks: flagBool(flags, "clicks")
+  });
+  const payload = {
+    ok: true,
+    target,
+    backend,
+    window: windowPayload,
+    recording: {
+      ok: true,
+      ...statFile(output),
+      duration,
+      audio: flagBool(flags, "audio") || flagString(flags, "audio-device") !== undefined,
+      clicks: flagBool(flags, "clicks")
+    }
+  };
+  if (json)
+    printJson(payload);
+  else
+    process.stdout.write(`${output}
+`);
+}
 function handleDoctor(json) {
   const status = permissions();
   const checks = {
@@ -594,6 +701,9 @@ async function main() {
       return;
     case "capture":
       handleCapture(parsed.flags, json);
+      return;
+    case "record":
+      handleRecord(parsed.flags, json);
       return;
     case "doctor":
       handleDoctor(json);

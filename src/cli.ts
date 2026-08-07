@@ -9,14 +9,14 @@ import {
   type CaptureResult,
   type WindowInfo,
 } from "./backends/macosHelper";
-import { captureScreen } from "./backends/screencapture";
+import { captureScreen, recordScreen } from "./backends/screencapture";
 import { CliError, assertValue } from "./lib/errors";
 import { readPngInfo } from "./lib/imageInfo";
 import { printJson } from "./lib/json";
 import { defaultOutputPath, helperPath } from "./lib/paths";
 import { parseTarget, resolveWindowTarget, type Target } from "./lib/target";
 
-const VERSION = "0.1.2";
+const VERSION = "0.2.0";
 
 interface ParsedArgs {
   command?: string;
@@ -34,6 +34,7 @@ Usage:
   sightline list windows [--json]
   sightline locate --target <target> [--json]
   sightline capture --target <target> [options]
+  sightline record --target <target> [options]
   sightline doctor [--json]
 
 Targets:
@@ -55,9 +56,19 @@ Capture options:
   --also-clipboard          Also copy saved image to clipboard.
   --json                    Print structured JSON.
 
+Record options:
+  -o, --output <file>       Output movie path. Default: ~/Movies/Sightline/*.mov
+  --duration <seconds>      Stop automatically after N seconds.
+  --audio                   Record default microphone input.
+  --audio-device <id>       Record a specific audio device id.
+  --clicks                  Show clicks in the recording.
+  --json                    Print structured JSON.
+
 Examples:
   sightline capture --target 'app:Google Chrome' --json
   sightline capture --target 'bundle:com.google.Chrome,title:*DevTools*'
+  sightline record --target 'app:Google Chrome' --duration 5 --json
+  sightline record --target 'rect:100,100,800,500' -o /tmp/demo.mov --json
   sightline locate --target 'app:Lynx'
   sightline capture --target 'rect:100,100,800,500' -o /tmp/area.png
   sightline capture --target 'lynx:headless,url:http://127.0.0.1:3000/template.js'
@@ -118,6 +129,18 @@ function targetFromFlags(flags: Map<string, string | boolean>): Target {
 
 function outputPath(flags: Map<string, string | boolean>, format: string): string {
   return resolve(flagString(flags, "output") ?? defaultOutputPath(format));
+}
+
+function defaultRecordPath(): string {
+  const stamp = new Date()
+    .toISOString()
+    .replaceAll(":", "")
+    .replace(/\.\d{3}Z$/, "Z");
+  return resolve(process.env.HOME ?? ".", "Movies/Sightline", `recording-${stamp}.mov`);
+}
+
+function recordOutputPath(flags: Map<string, string | boolean>): string {
+  return resolve(flagString(flags, "output") ?? defaultRecordPath());
 }
 
 function inferFormat(flags: Map<string, string | boolean>): string {
@@ -203,6 +226,10 @@ function statImage(path: string): { path: string; bytes: number; width?: number;
   return { path, bytes: statSync(path).size, ...readPngInfo(path) };
 }
 
+function statFile(path: string): { path: string; bytes: number } {
+  return { path, bytes: statSync(path).size };
+}
+
 function handleCapture(flags: Map<string, string | boolean>, json: boolean): void {
   const target = targetFromFlags(flags);
   const format = inferFormat(flags);
@@ -273,6 +300,65 @@ function handleCapture(flags: Map<string, string | boolean>, json: boolean): voi
   else process.stdout.write(`${output}\n`);
 }
 
+function handleRecord(flags: Map<string, string | boolean>, json: boolean): void {
+  const target = targetFromFlags(flags);
+  if (target.kind === "lynx-headless") {
+    throw new CliError("record does not support lynx:headless; use capture for headless screenshots");
+  }
+
+  const output = recordOutputPath(flags);
+  const durationText = flagString(flags, "duration");
+  const duration = durationText === undefined ? undefined : Number(durationText);
+  if (duration !== undefined && (!Number.isFinite(duration) || duration <= 0)) {
+    throw new CliError("--duration must be a positive number");
+  }
+
+  mkdirSync(dirname(output), { recursive: true });
+
+  let backend = "macos-record";
+  let windowPayload: Record<string, unknown> | undefined;
+  let recordTarget: "all" | "main" | { display: number } | { rect: string };
+
+  if (target.kind === "rect") {
+    recordTarget = { rect: target.rect };
+  } else if (target.kind === "screen") {
+    recordTarget = target.screen;
+  } else if (target.kind === "display") {
+    recordTarget = { display: target.display };
+  } else {
+    const window = resolveWindowTarget(target, listWindows());
+    windowPayload = describeWindow(window);
+    const { x, y, width, height } = window.bounds;
+    recordTarget = { rect: `${x},${y},${width},${height}` };
+    backend = "macos-window-record";
+  }
+
+  recordScreen({
+    target: recordTarget,
+    output,
+    duration,
+    audio: flagBool(flags, "audio"),
+    audioDeviceId: flagString(flags, "audio-device"),
+    clicks: flagBool(flags, "clicks"),
+  });
+
+  const payload = {
+    ok: true,
+    target,
+    backend,
+    window: windowPayload,
+    recording: {
+      ok: true,
+      ...statFile(output),
+      duration,
+      audio: flagBool(flags, "audio") || flagString(flags, "audio-device") !== undefined,
+      clicks: flagBool(flags, "clicks"),
+    },
+  };
+  if (json) printJson(payload);
+  else process.stdout.write(`${output}\n`);
+}
+
 function handleDoctor(json: boolean): void {
   const status = permissions();
   const checks = {
@@ -318,6 +404,9 @@ async function main(): Promise<void> {
       return;
     case "capture":
       handleCapture(parsed.flags, json);
+      return;
+    case "record":
+      handleRecord(parsed.flags, json);
       return;
     case "doctor":
       handleDoctor(json);

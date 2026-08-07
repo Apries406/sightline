@@ -15,6 +15,7 @@ sightline --help
 
 - Locate visible macOS windows by app name, bundle id, pid, title pattern, window id, or index.
 - Capture Chrome or other desktop apps without manual selection.
+- Record screen, display, rectangle, or app/window bounds to `.mov`.
 - Capture fixed rectangles, full screen, main screen, and specific displays.
 - Return structured JSON containing target, backend, window id, bounds, output path, and image metadata.
 - Provide a Lynx headless backend entrypoint for `template.js` screenshots through the existing Lynx DevTool smoke script.
@@ -30,6 +31,8 @@ bin/sightline capture --target 'app:Google Chrome' --json
 bin/sightline capture --target 'bundle:com.google.Chrome,title:*DevTools*' -o /tmp/devtools.png --json
 bin/sightline capture --target 'rect:100,100,800,500' -o /tmp/area.png
 bin/sightline capture --target 'screen:main' --delay 1
+bin/sightline record --target 'app:Google Chrome' --duration 5 -o /tmp/chrome.mov --json
+bin/sightline record --target 'rect:100,100,800,500' --duration 3 -o /tmp/area.mov --json
 bin/sightline capture --target 'lynx:headless,url:http://127.0.0.1:3000/template.js' --json
 ```
 
