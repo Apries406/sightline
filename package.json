@@ -5,8 +5,8 @@
   "license": "MIT",
   "type": "module",
   "bin": {
-    "sightline": "./bin/sightline",
-    "mshot-agent": "./bin/mshot-agent"
+    "sightline": "bin/sightline",
+    "mshot-agent": "bin/mshot-agent"
   },
   "scripts": {
     "build": "bun run build:helper && bun build src/cli.ts --target bun --outfile dist/sightline.js",
