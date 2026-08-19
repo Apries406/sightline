@@ -1,6 +1,9 @@
 import AppKit
 import CoreGraphics
 import Foundation
+import ImageIO
+import ScreenCaptureKit
+import UniformTypeIdentifiers
 
 struct Bounds: Encodable {
     let x: Int
@@ -188,6 +191,68 @@ func parseRect(_ value: String) -> CGRect {
     return CGRect(x: x, y: y, width: w, height: h)
 }
 
+func writePNG(_ image: CGImage, to path: String) {
+    let url = URL(fileURLWithPath: path)
+    try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    guard let dest = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil) else {
+        fail("failed to create image destination: \(path)")
+    }
+    CGImageDestinationAddImage(dest, image, nil)
+    guard CGImageDestinationFinalize(dest) else {
+        fail("failed to write image: \(path)")
+    }
+}
+
+func defaultScreenScale() -> Double {
+    Double(NSScreen.main?.backingScaleFactor ?? 1.0)
+}
+
+func captureWindowNative(_ options: [String: String]) {
+    guard let idText = options["id"], let id = UInt32(idText) else {
+        fail("capture-window-native requires --id")
+    }
+    guard let path = options["output"] else {
+        fail("capture-window-native requires --output")
+    }
+
+    let app = NSApplication.shared
+    app.setActivationPolicy(.accessory)
+
+    if #available(macOS 14.0, *) {
+        let sem = DispatchSemaphore(value: 0)
+        var captureError: Error?
+        Task { @MainActor in
+            do {
+                let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+                guard let window = content.windows.first(where: { $0.windowID == id }) else {
+                    fail("window not found in ScreenCaptureKit content: \(id)")
+                }
+                let scale = defaultScreenScale()
+                let filter = SCContentFilter(desktopIndependentWindow: window)
+                let config = SCStreamConfiguration()
+                config.width = max(1, Int((window.frame.width * scale).rounded()))
+                config.height = max(1, Int((window.frame.height * scale).rounded()))
+                config.showsCursor = false
+                config.capturesAudio = false
+                let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
+                writePNG(image, to: path)
+                printJSON(CaptureResult(ok: true, path: path, width: image.width, height: image.height))
+            } catch {
+                captureError = error
+            }
+            sem.signal()
+        }
+        while sem.wait(timeout: .now()) != .success {
+            RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: 0.05))
+        }
+        if let captureError {
+            fail("native window capture failed: \(captureError)")
+        }
+    } else {
+        fail("native window capture requires macOS 14+")
+    }
+}
+
 func permissionStatus() {
     let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
     let hasNamedForeignWindow = windows.contains { item in
@@ -205,6 +270,8 @@ case "list-displays":
     listDisplays()
 case "list-windows":
     listWindows()
+case "capture-window-native":
+    captureWindowNative(options)
 case "permissions":
     permissionStatus()
 default:

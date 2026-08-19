@@ -15,6 +15,7 @@ sightline --help
 
 - Locate visible macOS windows by app name, bundle id, pid, title pattern, window id, or index.
 - Capture Chrome or other desktop apps without manual selection.
+- Capture app/window targets through a native ScreenCaptureKit backend by default, so PNG window screenshots do not require the app to be topmost.
 - Record screen, display, rectangle, or app/window bounds to `.mov`.
 - Capture fixed rectangles, full screen, main screen, and specific displays.
 - Return structured JSON containing target, backend, window id, bounds, output path, and image metadata.
@@ -28,6 +29,7 @@ bun run build
 bin/sightline list windows --json
 bin/sightline locate --target 'app:Google Chrome' --json
 bin/sightline capture --target 'app:Google Chrome' --json
+bin/sightline capture --target 'app:Google Chrome' --backend screencapture --json
 bin/sightline capture --target 'bundle:com.google.Chrome,title:*DevTools*' -o /tmp/devtools.png --json
 bin/sightline capture --target 'rect:100,100,800,500' -o /tmp/area.png
 bin/sightline capture --target 'screen:main' --delay 1

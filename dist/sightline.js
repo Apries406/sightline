@@ -96,6 +96,9 @@ function listDisplays() {
 function listWindows() {
   return runHelper(["list-windows"]);
 }
+function captureWindowNative(id, output) {
+  return runHelper(["capture-window-native", "--id", String(id), "--output", output]);
+}
 function permissions() {
   return runHelper(["permissions"]);
 }
@@ -332,7 +335,7 @@ function resolveWindowTarget(target, windows) {
 }
 
 // src/cli.ts
-var VERSION = "0.2.0";
+var VERSION = "0.3.0";
 function usage() {
   return `Sightline ${VERSION}
 
@@ -360,6 +363,7 @@ Targets:
 Capture options:
   -o, --output <file>       Output image path.
   -f, --format <format>     png, jpg, tiff. Default: png
+  --backend <backend>       native or screencapture for PNG window captures. Default: native
   --delay <seconds>         Delay for screen/display captures.
   --cursor                  Include cursor for screen/display captures.
   --also-clipboard          Also copy saved image to clipboard.
@@ -549,6 +553,10 @@ function handleCapture(flags, json) {
   let backend = "";
   let windowPayload;
   let extra = {};
+  const requestedBackend = flagString(flags, "backend") ?? "native";
+  if (requestedBackend !== "native" && requestedBackend !== "screencapture") {
+    throw new CliError("--backend must be native or screencapture");
+  }
   if (target.kind === "rect") {
     backend = "macos-rect";
     captureScreen({ target: { rect: target.rect }, output, format });
@@ -579,11 +587,29 @@ function handleCapture(flags, json) {
     extra = { lynx: lynx.raw };
     capture = { ok: true, path: lynx.path, width: 0, height: 0 };
   } else {
-    backend = "macos-window";
     const window = resolveWindowTarget(target, listWindows());
     windowPayload = describeWindow(window);
-    captureScreen({ target: { windowId: window.id }, output, format });
-    capture = { ok: true, path: output, width: 0, height: 0 };
+    if (requestedBackend === "screencapture" || format !== "png") {
+      backend = "macos-window-screencapture";
+      captureScreen({ target: { windowId: window.id }, output, format });
+      capture = { ok: true, path: output, width: 0, height: 0 };
+    } else {
+      backend = "macos-window-native";
+      try {
+        capture = captureWindowNative(window.id, output);
+      } catch (error) {
+        backend = "macos-window-screencapture";
+        extra = {
+          ...extra,
+          nativeFallback: {
+            ok: false,
+            error: error instanceof Error ? error.message : String(error)
+          }
+        };
+        captureScreen({ target: { windowId: window.id }, output, format });
+        capture = { ok: true, path: output, width: 0, height: 0 };
+      }
+    }
   }
   if (flagBool(flags, "also-clipboard")) {
     maybeCopyToClipboard(output, true);

@@ -77,6 +77,10 @@ export function listWindows(): WindowInfo[] {
   return runHelper<WindowInfo[]>(["list-windows"]);
 }
 
+export function captureWindowNative(id: number, output: string): CaptureResult {
+  return runHelper<CaptureResult>(["capture-window-native", "--id", String(id), "--output", output]);
+}
+
 export function permissions(): PermissionStatus {
   return runHelper<PermissionStatus>(["permissions"]);
 }

@@ -3,6 +3,7 @@ import { copyFileSync, existsSync, mkdirSync, statSync } from "node:fs";
 import { dirname, extname, resolve } from "node:path";
 import { captureLynxHeadless } from "./backends/lynxHeadless";
 import {
+  captureWindowNative,
   listDisplays,
   listWindows,
   permissions,
@@ -16,7 +17,7 @@ import { printJson } from "./lib/json";
 import { defaultOutputPath, helperPath } from "./lib/paths";
 import { parseTarget, resolveWindowTarget, type Target } from "./lib/target";
 
-const VERSION = "0.2.0";
+const VERSION = "0.3.0";
 
 interface ParsedArgs {
   command?: string;
@@ -51,6 +52,7 @@ Targets:
 Capture options:
   -o, --output <file>       Output image path.
   -f, --format <format>     png, jpg, tiff. Default: png
+  --backend <backend>       native or screencapture for PNG window captures. Default: native
   --delay <seconds>         Delay for screen/display captures.
   --cursor                  Include cursor for screen/display captures.
   --also-clipboard          Also copy saved image to clipboard.
@@ -246,6 +248,10 @@ function handleCapture(flags: Map<string, string | boolean>, json: boolean): voi
   let backend = "";
   let windowPayload: Record<string, unknown> | undefined;
   let extra: Record<string, unknown> = {};
+  const requestedBackend = flagString(flags, "backend") ?? "native";
+  if (requestedBackend !== "native" && requestedBackend !== "screencapture") {
+    throw new CliError("--backend must be native or screencapture");
+  }
 
   if (target.kind === "rect") {
     backend = "macos-rect";
@@ -277,11 +283,29 @@ function handleCapture(flags: Map<string, string | boolean>, json: boolean): voi
     extra = { lynx: lynx.raw };
     capture = { ok: true, path: lynx.path, width: 0, height: 0 };
   } else {
-    backend = "macos-window";
     const window = resolveWindowTarget(target, listWindows());
     windowPayload = describeWindow(window);
-    captureScreen({ target: { windowId: window.id }, output, format });
-    capture = { ok: true, path: output, width: 0, height: 0 };
+    if (requestedBackend === "screencapture" || format !== "png") {
+      backend = "macos-window-screencapture";
+      captureScreen({ target: { windowId: window.id }, output, format });
+      capture = { ok: true, path: output, width: 0, height: 0 };
+    } else {
+      backend = "macos-window-native";
+      try {
+        capture = captureWindowNative(window.id, output);
+      } catch (error) {
+        backend = "macos-window-screencapture";
+        extra = {
+          ...extra,
+          nativeFallback: {
+            ok: false,
+            error: error instanceof Error ? error.message : String(error),
+          },
+        };
+        captureScreen({ target: { windowId: window.id }, output, format });
+        capture = { ok: true, path: output, width: 0, height: 0 };
+      }
+    }
   }
 
   if (flagBool(flags, "also-clipboard")) {
