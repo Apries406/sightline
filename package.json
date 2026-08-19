@@ -6,7 +6,7 @@
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Apries406/sightline.git"
+    "url": "https://github.com/Apries406/sightline.git"
   },
   "bin": {
     "sightline": "bin/sightline"
