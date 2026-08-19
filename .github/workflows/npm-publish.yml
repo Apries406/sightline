@@ -26,16 +26,20 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
-          registry-url: "https://registry.npmjs.org"
+          node-version: "24"
 
       - name: Build package
         run: bun run build
 
       - name: Inspect npm identity
         run: |
+          npm --version
           npm config get registry
+          if [ -n "${NODE_AUTH_TOKEN:-}" ]; then echo "NODE_AUTH_TOKEN is set"; else echo "NODE_AUTH_TOKEN is not set"; fi
           npm whoami --registry https://registry.npmjs.org || true
 
       - name: Publish to npm with trusted publishing
-        run: npm publish --access public --provenance --ignore-scripts
+        run: |
+          unset NODE_AUTH_TOKEN
+          unset NPM_TOKEN
+          npm publish --access public --provenance --ignore-scripts --registry https://registry.npmjs.org
