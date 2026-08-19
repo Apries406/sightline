@@ -14,7 +14,6 @@ done
 
 ROOT_DIR="$(cd -P "$(dirname "$SCRIPT_PATH")/.." && pwd)"
 export SIGHTLINE_ROOT="$ROOT_DIR"
-export MSHOT_AGENT_ROOT="$ROOT_DIR"
 
 if [[ -f "$ROOT_DIR/dist/sightline.js" ]]; then
   exec bun "$ROOT_DIR/dist/sightline.js" "$@"

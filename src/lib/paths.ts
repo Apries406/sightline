@@ -4,10 +4,8 @@ import { fileURLToPath } from "node:url";
 const thisFile = fileURLToPath(import.meta.url);
 export const projectRoot = process.env.SIGHTLINE_ROOT
   ? resolve(process.env.SIGHTLINE_ROOT)
-  : process.env.MSHOT_AGENT_ROOT
-    ? resolve(process.env.MSHOT_AGENT_ROOT)
   : resolve(dirname(thisFile), "../..");
-export const helperPath = join(projectRoot, "native/macos-helper/.build/mshot-macos-helper");
+export const helperPath = join(projectRoot, "native/macos-helper/.build/sightline-macos-helper");
 
 export function defaultOutputPath(format: string): string {
   const stamp = new Date()

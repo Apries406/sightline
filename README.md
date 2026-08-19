@@ -7,7 +7,7 @@ The goal is not a manual Snipaste clone. The product is a visual acquisition too
 ## Install
 
 ```bash
-npm install -g @apries/sightline
+npm install -g @apries/sightline --registry https://registry.npmjs.org/
 sightline --help
 ```
 

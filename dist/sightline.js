@@ -57,8 +57,8 @@ import { spawnSync as spawnSync2 } from "child_process";
 import { dirname, join, resolve } from "path";
 import { fileURLToPath } from "url";
 var thisFile = fileURLToPath(import.meta.url);
-var projectRoot = process.env.SIGHTLINE_ROOT ? resolve(process.env.SIGHTLINE_ROOT) : process.env.MSHOT_AGENT_ROOT ? resolve(process.env.MSHOT_AGENT_ROOT) : resolve(dirname(thisFile), "../..");
-var helperPath = join(projectRoot, "native/macos-helper/.build/mshot-macos-helper");
+var projectRoot = process.env.SIGHTLINE_ROOT ? resolve(process.env.SIGHTLINE_ROOT) : resolve(dirname(thisFile), "../..");
+var helperPath = join(projectRoot, "native/macos-helper/.build/sightline-macos-helper");
 function defaultOutputPath(format) {
   const stamp = new Date().toISOString().replaceAll(":", "").replace(/\.\d{3}Z$/, "Z");
   return join(process.env.HOME ?? ".", "Pictures/Screenshots", `sightline-${stamp}.${format}`);
@@ -346,7 +346,7 @@ function resolveWindowTarget(target, windows) {
 }
 
 // src/cli.ts
-var VERSION = "0.4.1";
+var VERSION = "0.4.2";
 function usage() {
   return `Sightline ${VERSION}
 

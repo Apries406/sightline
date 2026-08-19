@@ -1,16 +1,15 @@
 {
   "name": "@apries/sightline",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Agent-first macOS screenshot CLI with target-based window discovery.",
   "license": "MIT",
   "type": "module",
   "bin": {
-    "sightline": "bin/sightline",
-    "mshot-agent": "bin/mshot-agent"
+    "sightline": "bin/sightline"
   },
   "scripts": {
     "build": "bun run build:helper && bun build src/cli.ts --target bun --outfile dist/sightline.js",
-    "build:helper": "mkdir -p native/macos-helper/.build /private/tmp/sightline-swift-module-cache && swiftc -module-cache-path /private/tmp/sightline-swift-module-cache native/macos-helper/main.swift -o native/macos-helper/.build/mshot-macos-helper",
+    "build:helper": "mkdir -p native/macos-helper/.build /private/tmp/sightline-swift-module-cache && swiftc -module-cache-path /private/tmp/sightline-swift-module-cache native/macos-helper/main.swift -o native/macos-helper/.build/sightline-macos-helper",
     "check": "bun run build && bun run src/cli.ts --version && bun run src/cli.ts doctor --json && bun run src/cli.ts list displays --json",
     "dev": "bun run src/cli.ts",
     "postinstall": "bun run build:helper",
