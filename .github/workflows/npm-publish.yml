@@ -30,5 +30,10 @@ jobs:
       - name: Build package
         run: bun run build
 
+      - name: Inspect npm identity
+        run: |
+          npm config get registry
+          npm whoami --registry https://registry.npmjs.org || true
+
       - name: Publish to npm with trusted publishing
         run: npm publish --access public --provenance --ignore-scripts
