@@ -11,6 +11,16 @@ npm install -g @apries/sightline
 sightline --help
 ```
 
+## Agent Skill
+
+The npm package includes an agent skill at:
+
+```text
+skills/screenshot-sightline/SKILL.md
+```
+
+Copy that folder into your agent's skill directory, for example `~/.agents/skills/` or `~/.claude/skills/`, to make agents use `sightline` by default for screenshots and short screen recordings.
+
 ## Features
 
 - Locate visible macOS windows by app name, bundle id, pid, title pattern, window id, or index.

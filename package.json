@@ -1,6 +1,6 @@
 {
   "name": "@apries/sightline",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Agent-first macOS screenshot CLI with target-based window discovery.",
   "license": "MIT",
   "type": "module",
@@ -21,6 +21,7 @@
     "bin/",
     "dist/sightline.js",
     "native/macos-helper/main.swift",
+    "skills/",
     "src/",
     "tsconfig.json"
   ],
