@@ -1,4 +1,6 @@
 import AppKit
+import AVFoundation
+import CoreMedia
 import CoreGraphics
 import Foundation
 import ImageIO
@@ -38,9 +40,107 @@ struct CaptureResult: Encodable {
     let height: Int
 }
 
+struct RecordResult: Encodable {
+    let ok: Bool
+    let path: String
+    let width: Int
+    let height: Int
+    let duration: Double
+}
+
 struct PermissionResult: Encodable {
     let screenRecordingLikelyGranted: Bool
     let accessibilityTrusted: Bool
+}
+
+final class WindowRecorder: NSObject, SCStreamOutput {
+    let outputURL: URL
+    let duration: Double
+    let width: Int
+    let height: Int
+    var writer: AVAssetWriter?
+    var input: AVAssetWriterInput?
+    var stream: SCStream?
+    var error: Error?
+    var didStartWriting = false
+    var lastPTS: CMTime?
+
+    init(outputURL: URL, duration: Double, width: Int, height: Int) {
+        self.outputURL = outputURL
+        self.duration = duration
+        self.width = width
+        self.height = height
+    }
+
+    func start(filter: SCContentFilter, config: SCStreamConfiguration) async throws {
+        try? FileManager.default.removeItem(at: outputURL)
+        let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mov)
+        let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
+            AVVideoCodecKey: AVVideoCodecType.h264,
+            AVVideoWidthKey: width,
+            AVVideoHeightKey: height,
+            AVVideoCompressionPropertiesKey: [
+                AVVideoAverageBitRateKey: max(1_000_000, width * height * 4),
+                AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel
+            ]
+        ])
+        input.expectsMediaDataInRealTime = true
+        guard writer.canAdd(input) else {
+            throw NSError(domain: "Sightline", code: 1, userInfo: [NSLocalizedDescriptionKey: "cannot add video input"])
+        }
+        writer.add(input)
+        self.writer = writer
+        self.input = input
+
+        let stream = SCStream(filter: filter, configuration: config, delegate: nil)
+        try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: DispatchQueue(label: "sightline.record.screen"))
+        self.stream = stream
+        try await stream.startCapture()
+        try await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
+        await stop()
+    }
+
+    func stop() async {
+        do {
+            try await stream?.stopCapture()
+        } catch {
+            self.error = error
+        }
+        guard let writer, let input, didStartWriting else {
+            self.error = NSError(domain: "Sightline", code: 2, userInfo: [NSLocalizedDescriptionKey: "native recorder did not receive any complete frames"])
+            return
+        }
+        if let lastPTS {
+            writer.endSession(atSourceTime: lastPTS)
+        }
+        input.markAsFinished()
+        await withCheckedContinuation { continuation in
+            writer.finishWriting {
+                continuation.resume()
+            }
+        }
+    }
+
+    nonisolated func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
+        guard type == .screen else { return }
+        guard CMSampleBufferIsValid(sampleBuffer) else { return }
+        guard let attachments = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, createIfNecessary: false) as? [[SCStreamFrameInfo: Any]],
+              let status = attachments.first?[.status] as? Int,
+              status == SCFrameStatus.complete.rawValue else {
+            return
+        }
+        guard let writer = self.writer, let input = self.input else { return }
+        let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+        lastPTS = pts
+        if writer.status == .unknown {
+            writer.startWriting()
+            writer.startSession(atSourceTime: pts)
+            didStartWriting = true
+        }
+        if input.isReadyForMoreMediaData {
+            _ = input.append(sampleBuffer)
+        }
+    }
 }
 
 func fail(_ message: String, code: Int32 = 1) -> Never {
@@ -253,6 +353,62 @@ func captureWindowNative(_ options: [String: String]) {
     }
 }
 
+func recordWindowNative(_ options: [String: String]) {
+    guard let idText = options["id"], let id = UInt32(idText) else {
+        fail("record-window-native requires --id")
+    }
+    guard let durationText = options["duration"], let duration = Double(durationText), duration > 0 else {
+        fail("record-window-native requires --duration")
+    }
+    guard let path = options["output"] else {
+        fail("record-window-native requires --output")
+    }
+
+    let app = NSApplication.shared
+    app.setActivationPolicy(.accessory)
+
+    if #available(macOS 14.0, *) {
+        let sem = DispatchSemaphore(value: 0)
+        var recordError: Error?
+        Task { @MainActor in
+            do {
+                let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+                guard let window = content.windows.first(where: { $0.windowID == id }) else {
+                    fail("window not found in ScreenCaptureKit content: \(id)")
+                }
+                let scale = defaultScreenScale()
+                let width = max(2, Int((window.frame.width * scale).rounded()))
+                let height = max(2, Int((window.frame.height * scale).rounded()))
+                let filter = SCContentFilter(desktopIndependentWindow: window)
+                let config = SCStreamConfiguration()
+                config.width = width
+                config.height = height
+                config.minimumFrameInterval = CMTime(value: 1, timescale: 30)
+                config.queueDepth = 8
+                config.showsCursor = false
+                config.capturesAudio = false
+                let recorder = WindowRecorder(outputURL: URL(fileURLWithPath: path), duration: duration, width: width, height: height)
+                try await recorder.start(filter: filter, config: config)
+                if let error = recorder.error {
+                    throw error
+                }
+                printJSON(RecordResult(ok: true, path: path, width: width, height: height, duration: duration))
+            } catch {
+                recordError = error
+            }
+            sem.signal()
+        }
+        while sem.wait(timeout: .now()) != .success {
+            RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: 0.05))
+        }
+        if let recordError {
+            fail("native window record failed: \(recordError)")
+        }
+    } else {
+        fail("native window record requires macOS 14+")
+    }
+}
+
 func permissionStatus() {
     let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
     let hasNamedForeignWindow = windows.contains { item in
@@ -272,6 +428,8 @@ case "list-windows":
     listWindows()
 case "capture-window-native":
     captureWindowNative(options)
+case "record-window-native":
+    recordWindowNative(options)
 case "permissions":
     permissionStatus()
 default:

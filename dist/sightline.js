@@ -99,6 +99,17 @@ function listWindows() {
 function captureWindowNative(id, output) {
   return runHelper(["capture-window-native", "--id", String(id), "--output", output]);
 }
+function recordWindowNative(id, duration, output) {
+  return runHelper([
+    "record-window-native",
+    "--id",
+    String(id),
+    "--duration",
+    String(duration),
+    "--output",
+    output
+  ]);
+}
 function permissions() {
   return runHelper(["permissions"]);
 }
@@ -335,7 +346,7 @@ function resolveWindowTarget(target, windows) {
 }
 
 // src/cli.ts
-var VERSION = "0.3.0";
+var VERSION = "0.4.0";
 function usage() {
   return `Sightline ${VERSION}
 
@@ -371,6 +382,7 @@ Capture options:
 
 Record options:
   -o, --output <file>       Output movie path. Default: ~/Movies/Sightline/*.mov
+  --backend <backend>       native or screencapture for app/window recordings. Default: native
   --duration <seconds>      Stop automatically after N seconds.
   --audio                   Record default microphone input.
   --audio-device <id>       Record a specific audio device id.
@@ -639,10 +651,19 @@ function handleRecord(flags, json) {
   if (duration !== undefined && (!Number.isFinite(duration) || duration <= 0)) {
     throw new CliError("--duration must be a positive number");
   }
+  if (duration === undefined) {
+    throw new CliError("--duration is required for record so the command can finish without manual intervention");
+  }
+  const requestedBackend = flagString(flags, "backend") ?? "native";
+  if (requestedBackend !== "native" && requestedBackend !== "screencapture") {
+    throw new CliError("--backend must be native or screencapture");
+  }
   mkdirSync2(dirname3(output), { recursive: true });
   let backend = "macos-record";
   let windowPayload;
   let recordTarget;
+  let nativeRecord;
+  const needsLegacyRecording = flagBool(flags, "audio") || flagString(flags, "audio-device") !== undefined || flagBool(flags, "clicks");
   if (target.kind === "rect") {
     recordTarget = { rect: target.rect };
   } else if (target.kind === "screen") {
@@ -652,18 +673,26 @@ function handleRecord(flags, json) {
   } else {
     const window = resolveWindowTarget(target, listWindows());
     windowPayload = describeWindow(window);
-    const { x, y, width, height } = window.bounds;
-    recordTarget = { rect: `${x},${y},${width},${height}` };
-    backend = "macos-window-record";
+    if (requestedBackend === "native" && !needsLegacyRecording) {
+      backend = "macos-window-native-record";
+      nativeRecord = recordWindowNative(window.id, duration, output);
+      recordTarget = "all";
+    } else {
+      const { x, y, width, height } = window.bounds;
+      recordTarget = { rect: `${x},${y},${width},${height}` };
+      backend = "macos-window-record";
+    }
   }
-  recordScreen({
-    target: recordTarget,
-    output,
-    duration,
-    audio: flagBool(flags, "audio"),
-    audioDeviceId: flagString(flags, "audio-device"),
-    clicks: flagBool(flags, "clicks")
-  });
+  if (!nativeRecord) {
+    recordScreen({
+      target: recordTarget,
+      output,
+      duration,
+      audio: flagBool(flags, "audio"),
+      audioDeviceId: flagString(flags, "audio-device"),
+      clicks: flagBool(flags, "clicks")
+    });
+  }
   const payload = {
     ok: true,
     target,
@@ -671,6 +700,7 @@ function handleRecord(flags, json) {
     window: windowPayload,
     recording: {
       ok: true,
+      ...nativeRecord,
       ...statFile(output),
       duration,
       audio: flagBool(flags, "audio") || flagString(flags, "audio-device") !== undefined,

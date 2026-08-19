@@ -36,6 +36,14 @@ export interface CaptureResult {
   height: number;
 }
 
+export interface RecordResult {
+  ok: boolean;
+  path: string;
+  width: number;
+  height: number;
+  duration: number;
+}
+
 export interface PermissionStatus {
   screenRecordingLikelyGranted: boolean;
   accessibilityTrusted: boolean;
@@ -79,6 +87,18 @@ export function listWindows(): WindowInfo[] {
 
 export function captureWindowNative(id: number, output: string): CaptureResult {
   return runHelper<CaptureResult>(["capture-window-native", "--id", String(id), "--output", output]);
+}
+
+export function recordWindowNative(id: number, duration: number, output: string): RecordResult {
+  return runHelper<RecordResult>([
+    "record-window-native",
+    "--id",
+    String(id),
+    "--duration",
+    String(duration),
+    "--output",
+    output,
+  ]);
 }
 
 export function permissions(): PermissionStatus {
