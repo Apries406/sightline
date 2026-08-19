@@ -56,8 +56,8 @@ Title patterns support `*` wildcards. Without a wildcard, matching is case-insen
 ## Architecture
 
 - TypeScript CLI parses commands, target DSL, output options, and JSON protocol.
-- Swift helper uses CoreGraphics/AppKit to list displays, list windows, and inspect permission signals.
-- `/usr/sbin/screencapture` remains the capture backend for window, rectangle, full-screen, and display captures because macOS already handles that path well.
+- Swift helper uses CoreGraphics/AppKit to list displays, list windows, inspect permission signals, and run native ScreenCaptureKit app/window capture and recording.
+- `/usr/sbin/screencapture` remains the fallback and general-purpose backend for rectangle, full-screen, display, audio, and click-overlay recordings because macOS already handles those paths well.
 - Lynx headless capture delegates to `/Users/bytedance/.agents/skills/lynx-devtool/scripts/headless-smoke.mjs` when available.
 
 ## Permissions
