@@ -346,7 +346,7 @@ function resolveWindowTarget(target, windows) {
 }
 
 // src/cli.ts
-var VERSION = "0.4.2";
+var VERSION = "0.4.3";
 function usage() {
   return `Sightline ${VERSION}
 
